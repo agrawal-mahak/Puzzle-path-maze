@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        #game-container {
+            position: relative;
+            margin: 20px 0;
+        }
+        
+        #maze {
+            border: 3px solid #333;
+            background-color: #fff;
+        }
+        
+        #player {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            transition: all 0.1s ease;
+            z-index: 10;
+        }
+        
+        #goal {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #f44336;
+            border-radius: 50%;
+            z-index: 5;
+        }
+        
+        .wall {
+            position: absolute;
+            background-color: #333;
+        }
+        
+        #controls {
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        #message {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            height: 24px;
+        }
+        
+        #timer {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Maze Game</h1>
+    <div id="game-container">
+        <canvas id="maze" width="400" height="400"></canvas>
+        <div id="player"></div>
+        <div id="goal"></div>
+    </div>
+    <div id="timer">Time: 0s</div>
+    <div id="message"></div>
+    <div id="controls">
+        <button id="restart-btn">Restart</button>
+        <button id="new-maze-btn">New Maze</button>
+    </div>
+
+    <script>
+        // Game elements
+        const canvas = document.getElementById('maze');
+        const ctx = canvas.getContext('2d');
+        const player = document.getElementById('player');
+        const goal = document.getElementById('goal');
+        const message = document.getElementById('message');
+        const timer = document.getElementById('timer');
+        const restartBtn = document.getElementById('restart-btn');
+        const newMazeBtn = document.getElementById('new-maze-btn');
+        
+        // Game variables
+        let maze = [];
+        const cellSize = 20;
+        const rows = 20;
+        const cols = 20;
+        let playerPos = { x: 1, y: 1 };
+        let goalPos = { x: cols - 2, y: rows - 2 };
+        let startTime;
+        let timerInterval;
+        let isGameOver = false;
+        
+        // Initialize the game
+        function initGame() {
+            generateMaze();
+            drawMaze();
+            placePlayer();
+            placeGoal();
+            startTimer();
+            isGameOver = false;
+            message.textContent = '';
+        }
+        
+        // Generate maze using Depth-First Search algorithm
+        function generateMaze() {
+            // Initialize maze grid (1 = wall, 0 = path)
+            maze = Array(rows).fill().map(() => Array(cols).fill(1));
+            
+            // Start from (1,1)
+            const stack = [{x: 1, y: 1}];
+            maze[1][1] = 0;
+            
+            // Directions: up, right, down, left
+            const directions = [
+                {dx: 0, dy: -2}, // up
+                {dx: 2, dy: 0},  // right
+                {dx: 0, dy: 2},   // down
+                {dx: -2, dy: 0}   // left
+            ];
+            
+            while (stack.length > 0) {
+                const current = stack[stack.length - 1];
+                const {x, y} = current;
+                
+                // Shuffle directions
+                const shuffledDirections = [...directions].sort(() => Math.random() - 0.5);
+                
+                let found = false;
+                
+                for (const dir of shuffledDirections) {
+                    const nx = x + dir.dx;
+                    const ny = y + dir.dy;
+                    
+                    if (nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 && maze[ny][nx] === 1) {
+                        // Carve path
+                        maze[ny][nx] = 0;
+                        maze[y + dir.dy/2][x + dir.dx/2] = 0;
+                        stack.push({x: nx, y: ny});
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    stack.pop();
+                }
+            }
+            
+            // Ensure there's a path to the goal
+            maze[rows - 2][cols - 2] = 0;
+            maze[rows - 2][cols - 3] = 0;
+        }
+        
+        // Draw the maze on canvas
+        function drawMaze() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#333';
+            
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    if (maze[y][x] === 1) {
+                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+        }
+        
+        // Place player at starting position
+        function placePlayer() {
+            playerPos = { x: 1, y: 1 };
+            updatePlayerPosition();
+        }
+        
+        // Place goal at end position
+        function placeGoal() {
+            goalPos = { x: cols - 2, y: rows - 2 };
+            goal.style.left = (goalPos.x * cellSize) + 'px';
+            goal.style.top = (goalPos.y * cellSize) + 'px';
+        }
+        
+        // Update player's visual position
+        function updatePlayerPosition() {
+            player.style.left = (playerPos.x * cellSize) + 'px';
+            player.style.top = (playerPos.y * cellSize) + 'px';
+        }
+        
+        // Start game timer
+        function startTimer() {
+            clearInterval(timerInterval);
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                timer.textContent = `Time: ${elapsed}s`;
+            }, 1000);
+        }
+        
+        // Handle keyboard input
+        function handleKeyDown(e) {
+            if (isGameOver) return;
+            
+            let newX = playerPos.x;
+            let newY = playerPos.y;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    newY--;
+                    break;
+                case 'ArrowRight':
+                    newX++;
+                    break;
+                case 'ArrowDown':
+                    newY++;
+                    break;
+                case 'ArrowLeft':
+                    newX--;
+                    break;
+                default:
+                    return;
+            }
+            
+            // Check if move is valid (within bounds and not a wall)
+            if (newX >= 0 && newX < cols && newY >= 0 && newY < rows && maze[newY][newX] === 0) {
+                playerPos.x = newX;
+                playerPos.y = newY;
+                updatePlayerPosition();
+                
+                // Check if player reached the goal
+                if (playerPos.x === goalPos.x && playerPos.y === goalPos.y) {
+                    endGame(true);
+                }
+            }
+        }
+        
+        // End the game
+        function endGame(win) {
+            isGameOver = true;
+            clearInterval(timerInterval);
+            
+            if (win) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                message.textContent = `You won in ${elapsed} seconds!`;
+                message.style.color = '#4CAF50';
+            } else {
+                message.textContent = 'Try again!';
+                message.style.color = '#f44336';
+            }
+        }
+        
+        // Event listeners
+        document.addEventListener('keydown', handleKeyDown);
+        restartBtn.addEventListener('click', () => {
+            placePlayer();
+            startTimer();
+            isGameOver = false;
+            message.textContent = '';
+        });
+        newMazeBtn.addEventListener('click', initGame);
+        
+        // Start the game
+        initGame();
+    </script>
+</body>
+</html>
